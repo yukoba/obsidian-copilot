@@ -289,6 +289,17 @@ const Chat: React.FC<ChatProps> = ({
           .replace("{$day}", firstMessageDate.getDate().toString().padStart(2, "0"))
           .replace("\\", "/");
 
+        // Keep removing characters from the end until the byte length is within the limit
+        const MAX_FILENAME_BYTES = 252;
+        let buffer = Buffer.from(customFileName, "utf8");
+        while (buffer.length > MAX_FILENAME_BYTES) {
+          customFileName = customFileName.slice(0, -1);
+          buffer = Buffer.from(customFileName, "utf8");
+          if (customFileName.length === 0) {
+            break;
+          }
+        }
+
         // Sanitize the final filename
         const sanitizedFileName = customFileName.replace(/[:*?"<>|]/g, "_");
         const noteFileName = `${settings.defaultSaveFolder}/${sanitizedFileName}.md`;
