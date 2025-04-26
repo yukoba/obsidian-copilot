@@ -260,7 +260,8 @@ const Chat: React.FC<ChatProps> = ({
           await app.vault.createFolder(settings.defaultSaveFolder);
         }
 
-        const { fileName: timestampFileName } = formatDateTime(new Date(firstMessageEpoch));
+        const firstMessageDate = new Date(firstMessageEpoch);
+        const { fileName: timestampFileName } = formatDateTime(firstMessageDate);
 
         // Get the first user message
         const firstUserMessage = visibleMessages.find((message) => message.sender === USER_SENDER);
@@ -282,10 +283,14 @@ const Chat: React.FC<ChatProps> = ({
         customFileName = customFileName
           .replace("{$topic}", firstTenWords.slice(0, 100).replace(/\s+/g, "_"))
           .replace("{$date}", timestampFileName.split("_")[0])
-          .replace("{$time}", timestampFileName.split("_")[1]);
+          .replace("{$time}", timestampFileName.split("_")[1])
+          .replace("{$year}", firstMessageDate.getFullYear().toString())
+          .replace("{$month}", (firstMessageDate.getMonth() + 1).toString().padStart(2, "0"))
+          .replace("{$day}", firstMessageDate.getDate().toString().padStart(2, "0"))
+          .replace("\\", "/");
 
         // Sanitize the final filename
-        const sanitizedFileName = customFileName.replace(/[\\/:*?"<>|]/g, "_");
+        const sanitizedFileName = customFileName.replace(/[:*?"<>|]/g, "_");
         const noteFileName = `${settings.defaultSaveFolder}/${sanitizedFileName}.md`;
 
         // Add the timestamp and model properties to the note content
@@ -305,6 +310,14 @@ ${chatContent}`;
           await app.vault.modify(existingFile, noteContentWithTimestamp);
           new Notice(`Chat updated in existing note: ${noteFileName}`);
         } else {
+          // Create folders
+          const directoryPath = noteFileName.substring(0, noteFileName.lastIndexOf("/"));
+          if (directoryPath != "") {
+            const directoryExists = app.vault.getAbstractFileByPath(directoryPath);
+            if (!directoryExists) {
+              await app.vault.createFolder(directoryPath);
+            }
+          }
           // If the file doesn't exist, create a new one
           await app.vault.create(noteFileName, noteContentWithTimestamp);
           new Notice(`Chat saved as new note: ${noteFileName}`);

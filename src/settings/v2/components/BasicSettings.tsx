@@ -56,26 +56,34 @@ export const BasicSettings: React.FC = () => {
       }
 
       // Check illegal characters (excluding variable placeholders)
-      const illegalChars = /[\\/:*?"<>|]/;
+      const illegalChars = /[:*?"<>|]/;
       const formatWithoutVars = format
+        .replace(/\{\$year}/g, "")
+        .replace(/\{\$month}/g, "")
+        .replace(/\{\$day}/g, "")
         .replace(/\{\$date}/g, "")
         .replace(/\{\$time}/g, "")
         .replace(/\{\$topic}/g, "");
 
       if (illegalChars.test(formatWithoutVars)) {
-        new Notice(`Error: Format contains illegal characters (\\/:*?"<>|)`, 4000);
+        new Notice(`Error: Format contains illegal characters (:*?"<>|)`, 4000);
         return;
       }
 
       // Generate example filename
-      const { fileName: timestampFileName } = formatDateTime(new Date());
+      const curDate = new Date();
+      const { fileName: timestampFileName } = formatDateTime(curDate);
       const firstTenWords = "test topic name";
 
       // Create example filename
       const customFileName = format
         .replace("{$topic}", firstTenWords.slice(0, 100).replace(/\s+/g, "_"))
         .replace("{$date}", timestampFileName.split("_")[0])
-        .replace("{$time}", timestampFileName.split("_")[1]);
+        .replace("{$time}", timestampFileName.split("_")[1])
+        .replace("{$year}", curDate.getFullYear().toString())
+        .replace("{$month}", (curDate.getMonth() + 1).toString().padStart(2, "0"))
+        .replace("{$day}", curDate.getDate().toString().padStart(2, "0"))
+        .replace("\\", "/");
 
       // Save settings
       updateSetting("defaultConversationNoteName", format);
@@ -323,13 +331,23 @@ export const BasicSettings: React.FC = () => {
                     </TooltipTrigger>
                     <TooltipContent className="max-w-96 flex flex-col gap-2 py-4">
                       <div className="text-sm font-medium text-accent">
-                        Note: All the following variables must be included in the template.
+                        Note: <strong>{"{$date}"}</strong>, <strong>{"{$time}"}</strong>, and{" "}
+                        <strong>{"{$topic}"}</strong> must be included in the template.
                       </div>
                       <div>
                         <div className="text-sm font-medium text-muted">Available variables:</div>
                         <ul className="text-sm text-muted pl-4">
                           <li>
                             <strong>{"{$date}"}</strong>: Date in YYYYMMDD format
+                          </li>
+                          <li>
+                            <strong>{"{$year}"}</strong>: Date in YYYY format
+                          </li>
+                          <li>
+                            <strong>{"{$month}"}</strong>: Date in MM format
+                          </li>
+                          <li>
+                            <strong>{"{$day}"}</strong>: Date in DD format
                           </li>
                           <li>
                             <strong>{"{$time}"}</strong>: Time in HHMMSS format
