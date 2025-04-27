@@ -272,7 +272,7 @@ const Chat: React.FC<ChatProps> = ({
               .split(/\s+/)
               .slice(0, 10)
               .join(" ")
-              .replace(/[\\/:*?"<>|]/g, "") // Remove invalid filename characters
+              .replace(/[\\/:*?"<>|#^[\]]/g, "") // Remove invalid filename characters
               .trim()
           : "Untitled Chat";
 
