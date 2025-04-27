@@ -5,6 +5,7 @@
 - Added support for `{$year}` (4-digit year), `{$month}` (2-digit month), and `{$day}` (2-digit day) in the Conversation Filename Template.
 - Create necessary folders based on slashes (/) in the Conversation Filename Template.
 - Added logic to shorten the filename to ensure it does not exceed 255 bytes.
+- Removed characters `#^[]` from generated filenames because Obsidian cannot use them in note names.
 
 ---
 
