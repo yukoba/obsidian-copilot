@@ -190,7 +190,8 @@ export class ChatPersistenceManager {
    */
   private generateFileName(messages: ChatMessage[], firstMessageEpoch: number): string {
     const settings = getSettings();
-    const formattedDateTime = formatDateTime(new Date(firstMessageEpoch));
+    const firstMessageDate = new Date(firstMessageEpoch);
+    const formattedDateTime = formatDateTime(firstMessageDate);
     const timestampFileName = formattedDateTime.fileName;
 
     // Get the first user message
@@ -202,7 +203,7 @@ export class ChatPersistenceManager {
           .split(/\s+/)
           .slice(0, 10)
           .join(" ")
-          .replace(/[\\/:*?"<>|]/g, "") // Remove invalid filename characters
+          .replace(/[\\/:*?"<>|#^[\]]/g, "") // Remove invalid filename characters
           .trim()
       : "Untitled Chat";
 
@@ -213,10 +214,25 @@ export class ChatPersistenceManager {
     customFileName = customFileName
       .replace("{$topic}", firstTenWords.slice(0, 100).replace(/\s+/g, "_"))
       .replace("{$date}", timestampFileName.split("_")[0])
-      .replace("{$time}", timestampFileName.split("_")[1]);
+      .replace("{$time}", timestampFileName.split("_")[1])
+      .replace("{$year}", firstMessageDate.getFullYear().toString())
+      .replace("{$month}", (firstMessageDate.getMonth() + 1).toString().padStart(2, "0"))
+      .replace("{$day}", firstMessageDate.getDate().toString().padStart(2, "0"))
+      .replace("\\", "/");
+
+    // Keep removing characters from the end until the byte length is within the limit
+    const MAX_FILENAME_BYTES = 252;
+    let buffer = Buffer.from(customFileName, "utf8");
+    while (buffer.length > MAX_FILENAME_BYTES) {
+      customFileName = customFileName.slice(0, -1);
+      buffer = Buffer.from(customFileName, "utf8");
+      if (customFileName.length === 0) {
+        break;
+      }
+    }
 
     // Sanitize the final filename
-    const sanitizedFileName = customFileName.replace(/[\\/:*?"<>|]/g, "_");
+    const sanitizedFileName = customFileName.replace(/[:*?"<>|]/g, "_");
 
     // Add project ID as prefix for project-specific chat histories
     const currentProject = getCurrentProject();
