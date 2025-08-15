@@ -220,16 +220,8 @@ export class ChatPersistenceManager {
       .replace("{$day}", firstMessageDate.getDate().toString().padStart(2, "0"))
       .replace("\\", "/");
 
-    // Keep removing characters from the end until the byte length is within the limit
-    const MAX_FILENAME_BYTES = 252;
-    let buffer = Buffer.from(customFileName, "utf8");
-    while (buffer.length > MAX_FILENAME_BYTES) {
-      customFileName = customFileName.slice(0, -1);
-      buffer = Buffer.from(customFileName, "utf8");
-      if (customFileName.length === 0) {
-        break;
-      }
-    }
+    // 252 = 255 - 3 (.md)
+    customFileName = this.truncateStringByBytes(customFileName, 252);
 
     // Sanitize the final filename
     const sanitizedFileName = customFileName.replace(/[:*?"<>|]/g, "_");
@@ -239,6 +231,17 @@ export class ChatPersistenceManager {
     const filePrefix = currentProject ? `${currentProject.id}__` : "";
 
     return `${settings.defaultSaveFolder}/${filePrefix}${sanitizedFileName}.md`;
+  }
+
+  private truncateStringByBytes(str: string, maxBytes: number): string {
+    const encoder = new TextEncoder();
+    const encoded: Uint8Array = encoder.encode(str);
+
+    if (encoded.length <= maxBytes) {
+      return str;
+    } else {
+      return new TextDecoder().decode(encoded.subarray(0, maxBytes));
+    }
   }
 
   /**
