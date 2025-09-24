@@ -60,14 +60,25 @@ export class ChatPersistenceManager {
         }
       }
 
-      const fileName = this.generateFileName(messages, firstMessageEpoch, topic);
+      const fileName = this.generateFileName(messages, firstMessageEpoch, undefined /* topic */);
       const noteContent = this.generateNoteContent(chatContent, firstMessageEpoch, modelKey, topic);
 
-      if (existingFile) {
+      const existingFile2 = app.vault.getAbstractFileByPath(fileName);
+
+      if (existingFile2 instanceof TFile) {
         // If the file exists, update its content
-        await this.app.vault.modify(existingFile, noteContent);
-        logInfo(`[ChatPersistenceManager] Updated existing chat file: ${existingFile.path}`);
+        await this.app.vault.modify(existingFile2, noteContent);
+        logInfo(`[ChatPersistenceManager] Updated existing chat file: ${existingFile2.path}`);
       } else {
+        // Create folders
+        const directoryPath = fileName.substring(0, fileName.lastIndexOf("/"));
+        if (directoryPath != "") {
+          const directoryExists = app.vault.getAbstractFileByPath(directoryPath);
+          if (!directoryExists) {
+            await app.vault.createFolder(directoryPath);
+          }
+        }
+
         // If the file doesn't exist, create a new one
         await this.app.vault.create(fileName, noteContent);
         new Notice(`Chat saved as note: ${fileName}`);
@@ -273,7 +284,8 @@ ${conversationSummary}`;
     topic?: string
   ): string {
     const settings = getSettings();
-    const formattedDateTime = formatDateTime(new Date(firstMessageEpoch));
+    const firstMessageDate = new Date(firstMessageEpoch);
+    const formattedDateTime = formatDateTime(firstMessageDate);
     const timestampFileName = formattedDateTime.fileName;
 
     // Use provided topic or fall back to first 10 words
@@ -290,7 +302,7 @@ ${conversationSummary}`;
             .split(/\s+/)
             .slice(0, 10)
             .join(" ")
-            .replace(/[\\/:*?"<>|]/g, "") // Remove invalid filename characters
+            .replace(/[\\/:*?"<>|#^[\]]/g, "") // Remove invalid filename characters
             .trim()
         : "Untitled Chat";
     }
@@ -302,16 +314,33 @@ ${conversationSummary}`;
     customFileName = customFileName
       .replace("{$topic}", topicForFilename.slice(0, 100).replace(/\s+/g, "_"))
       .replace("{$date}", timestampFileName.split("_")[0])
-      .replace("{$time}", timestampFileName.split("_")[1]);
+      .replace("{$time}", timestampFileName.split("_")[1])
+      .replace("{$year}", firstMessageDate.getFullYear().toString())
+      .replace("{$month}", (firstMessageDate.getMonth() + 1).toString().padStart(2, "0"))
+      .replace("{$day}", firstMessageDate.getDate().toString().padStart(2, "0"));
 
     // Sanitize the final filename
-    const sanitizedFileName = customFileName.replace(/[\\/:*?"<>|]/g, "_");
+    const sanitizedFileName = customFileName.replace(/[\\:*?"<>|]/g, "_");
 
     // Add project ID as prefix for project-specific chat histories
     const currentProject = getCurrentProject();
     const filePrefix = currentProject ? `${currentProject.id}__` : "";
 
-    return `${settings.defaultSaveFolder}/${filePrefix}${sanitizedFileName}.md`;
+    // 252 = 255 - 3 (.md)
+    const trimmedFileName = this.truncateStringByBytes(`${filePrefix}${sanitizedFileName}`, 252);
+
+    return `${settings.defaultSaveFolder}/${trimmedFileName}.md`;
+  }
+
+  private truncateStringByBytes(str: string, maxBytes: number): string {
+    const encoder = new TextEncoder();
+    const encoded: Uint8Array = encoder.encode(str);
+
+    if (encoded.length <= maxBytes) {
+      return str;
+    } else {
+      return new TextDecoder().decode(encoded.subarray(0, maxBytes));
+    }
   }
 
   /**
