@@ -759,7 +759,16 @@ export default class ChatModelManager {
       logInfo(`Enabling Responses API for GPT-5 model: ${model.name} (${selectedModel.vendor})`);
     }
 
-    const newModelInstance = new selectedModel.AIConstructor(constructorConfig);
+    let newModelInstance = new selectedModel.AIConstructor(constructorConfig);
+
+    // Enable Google tools if provider is Gemini
+    if (model.provider === ChatModelProviders.GOOGLE) {
+      newModelInstance = newModelInstance.bindTools([
+        { googleSearch: {} }, // Grounding with Google Search
+        { urlContext: {} }, // URL context
+        { codeExecution: {} }, // Code execution
+      ]);
+    }
 
     // Override getNumTokens to avoid tiktoken's remote fetch of gpt2.json from
     // tiktoken.pages.dev. LangChain's default implementation tries to download
