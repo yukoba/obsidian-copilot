@@ -55,7 +55,7 @@ const GOOGLE_SAFETY_SETTINGS_BLOCK_NONE: SafetySetting[] = [
 // vocabulary from tiktoken.pages.dev, which blocks all LLM calls when the CDN is
 // unreachable. This char/4 estimation is the same fallback LangChain uses internally
 // before tiktoken loads. Actual token usage comes from API response metadata.
- 
+
 (
   BaseLanguageModel.prototype as { getNumTokens: (...args: unknown[]) => Promise<number> }
 ).getNumTokens = async (content: string | Array<{ type: string; text?: string }>) => {
@@ -849,7 +849,30 @@ export default class ChatModelManager {
       return new GitHubCopilotResponsesModel(constructorConfig);
     }
 
-    const newModelInstance = new selectedModel.AIConstructor(constructorConfig);
+    let newModelInstance = new selectedModel.AIConstructor(constructorConfig);
+
+    if ((model.provider as ChatModelProviders) === ChatModelProviders.GOOGLE) {
+      // Enable Google tools if provider is Gemini
+      newModelInstance = (newModelInstance.bindTools?.([
+        { googleSearch: {} }, // Grounding with Google Search
+        { urlContext: {} }, // URL context
+        { codeExecution: {} }, // Code execution
+        // { googleMaps: {} }, // Grounding with Google Maps
+      ]) ?? newModelInstance) as BaseChatModel;
+    } else if ((model.provider as ChatModelProviders) === ChatModelProviders.OPENROUTERAI) {
+      newModelInstance = (newModelInstance.bindTools?.([
+        { type: "openrouter:web_search" },
+        { type: "openrouter:web_fetch" },
+      ]) ?? newModelInstance) as BaseChatModel;
+    } else if ((model.provider as ChatModelProviders) === ChatModelProviders.OPENAI) {
+      newModelInstance = (newModelInstance.bindTools?.([{ type: "web_search" }]) ??
+        newModelInstance) as BaseChatModel;
+    } else if ((model.provider as ChatModelProviders) === ChatModelProviders.ANTHROPIC) {
+      newModelInstance = (newModelInstance.bindTools?.([
+        { type: "web_search_20260209", name: "web_search" },
+        { type: "web_fetch_20260209", name: "web_fetch" },
+      ]) ?? newModelInstance) as BaseChatModel;
+    }
 
     return newModelInstance;
   }
