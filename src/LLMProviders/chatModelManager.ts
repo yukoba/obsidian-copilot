@@ -827,7 +827,17 @@ export default class ChatModelManager {
       return lmStudioInstance;
     }
 
-    const newModelInstance = new selectedModel.AIConstructor(constructorConfig);
+    let newModelInstance = new selectedModel.AIConstructor(constructorConfig);
+
+    // Enable Google tools if provider is Gemini
+    if (model.provider === ChatModelProviders.GOOGLE) {
+      newModelInstance = newModelInstance.bindTools([
+        { googleSearch: {} }, // Grounding with Google Search
+        { urlContext: {} }, // URL context
+        { codeExecution: {} }, // Code execution
+        // { googleMaps: {} }, // Grounding with Google Maps
+      ]);
+    }
 
     return newModelInstance;
   }
