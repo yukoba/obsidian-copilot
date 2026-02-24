@@ -21,7 +21,7 @@ import {
 import { App, Notice, TFile } from "obsidian";
 import { MessageRepository } from "./MessageRepository";
 
-const SAFE_FILENAME_BYTE_LIMIT = 100;
+const SAFE_FILENAME_BYTE_LIMIT = 200;
 
 /**
  * Escape a string for safe YAML double-quoted string value
@@ -100,14 +100,16 @@ export class ChatPersistenceManager {
       );
       let targetFile: TFile | null = existingFile;
 
+      const existingFile2 = app.vault.getAbstractFileByPath(preferredFileName);
+
       // Check if existingFile is a real vault file (not a synthetic object for hidden dirs)
       const existingFileIsReal =
-        existingFile != null && isInVaultCache(this.app, existingFile.path);
+        existingFile2 != null && isInVaultCache(this.app, existingFile2.path);
 
-      if (existingFile && existingFileIsReal) {
+      if (existingFile2 instanceof TFile && existingFileIsReal) {
         // If the file exists in the vault cache, update via vault API
-        await this.app.vault.modify(existingFile, noteContent);
-        logInfo(`[ChatPersistenceManager] Updated existing chat file: ${existingFile.path}`);
+        await this.app.vault.modify(existingFile2, noteContent);
+        logInfo(`[ChatPersistenceManager] Updated existing chat file: ${existingFile2.path}`);
       } else if (
         !isInVaultCache(this.app, preferredFileName) &&
         (await this.app.vault.adapter.exists(preferredFileName))
@@ -121,6 +123,15 @@ export class ChatPersistenceManager {
           `[ChatPersistenceManager] Updated existing chat file via adapter: ${preferredFileName}`
         );
       } else {
+        // Create folders
+        const directoryPath = preferredFileName.substring(0, preferredFileName.lastIndexOf("/"));
+        if (directoryPath != "") {
+          const directoryExists = app.vault.getAbstractFileByPath(directoryPath);
+          if (!directoryExists) {
+            await app.vault.createFolder(directoryPath);
+          }
+        }
+
         // File doesn't exist, create a new one
         try {
           targetFile = await this.app.vault.create(preferredFileName, noteContent);
@@ -624,7 +635,8 @@ ${conversationSummary}`;
     topic?: string
   ): string {
     const settings = getSettings();
-    const formattedDateTime = formatDateTime(new Date(firstMessageEpoch));
+    const firstMessageDate = new Date(firstMessageEpoch);
+    const formattedDateTime = formatDateTime(firstMessageDate);
     const timestampFileName = formattedDateTime.fileName;
 
     // Use provided topic or fall back to first 10 words
@@ -685,7 +697,10 @@ ${conversationSummary}`;
     customFileName = customFileName
       .replace("{$topic}", truncatedTopic)
       .replace("{$date}", timestampFileName.split("_")[0])
-      .replace("{$time}", timestampFileName.split("_")[1]);
+      .replace("{$time}", timestampFileName.split("_")[1])
+      .replace("{$year}", firstMessageDate.getFullYear().toString())
+      .replace("{$month}", (firstMessageDate.getMonth() + 1).toString().padStart(2, "0"))
+      .replace("{$day}", firstMessageDate.getDate().toString().padStart(2, "0"));
 
     // Sanitize the final filename (replace any illegal chars with underscore)
     // Also remove leftover square brackets which are illegal on some platforms
@@ -694,7 +709,7 @@ ${conversationSummary}`;
       .replace(/\[\[([^\]]+)\]\]/g, "$1")
       .replace(/[{}[\]]/g, "_")
       // eslint-disable-next-line no-control-regex
-      .replace(/[\\/:*?"<>|\x00-\x1F]/g, "_");
+      .replace(/[\\:*?"<>|\x00-\x1F]/g, "_");
 
     // Final safety check: ensure the complete basename fits within the limit
     const baseNameWithPrefix = `${filePrefix}${sanitizedFileName}.md`;
