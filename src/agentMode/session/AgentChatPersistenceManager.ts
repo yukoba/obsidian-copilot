@@ -35,8 +35,8 @@ import {
 import { GLOBAL_SCOPE } from "./scope";
 import type { AgentChatMessage, BackendId, SessionUsage } from "./types";
 
-const SAFE_FILENAME_BYTE_LIMIT = 100;
-const AGENT_FILENAME_PREFIX = "agent__";
+const SAFE_FILENAME_BYTE_LIMIT = 200;
+const AGENT_FILENAME_PREFIX = "agent/";
 
 function parseUsageJson(raw: unknown): SessionUsage | undefined {
   if (typeof raw !== "string" || raw.trim().length === 0) return undefined;
@@ -145,6 +145,15 @@ export class AgentChatPersistenceManager {
       }
 
       try {
+        // Create folders
+        const directoryPath = preferredFileName.substring(0, preferredFileName.lastIndexOf("/"));
+        if (directoryPath != "") {
+          const directoryExists = this.app.vault.getAbstractFileByPath(directoryPath);
+          if (!directoryExists) {
+            await this.app.vault.createFolder(directoryPath);
+          }
+        }
+
         const created = await this.app.vault.create(preferredFileName, renderNote(""));
         return { path: created.path };
       } catch (err) {
@@ -326,7 +335,8 @@ export class AgentChatPersistenceManager {
     folder: string
   ): string {
     const settings = getSettings();
-    const formatted = formatDateTime(new Date(firstMessageEpoch));
+    const firstMessageDate = new Date(firstMessageEpoch);
+    const formatted = formatDateTime(firstMessageDate);
     const timestampFileName = formatted.fileName;
 
     const firstUser = messages.find((m) => m.sender === USER_SENDER);
@@ -365,13 +375,16 @@ export class AgentChatPersistenceManager {
     customFileName = customFileName
       .replace("{$topic}", truncatedTopic)
       .replace("{$date}", timestampFileName.split("_")[0])
-      .replace("{$time}", timestampFileName.split("_")[1]);
+      .replace("{$time}", timestampFileName.split("_")[1])
+      .replace("{$year}", firstMessageDate.getFullYear().toString())
+      .replace("{$month}", (firstMessageDate.getMonth() + 1).toString().padStart(2, "0"))
+      .replace("{$day}", firstMessageDate.getDate().toString().padStart(2, "0"));
 
     const sanitizedFileName = customFileName
       .replace(/\[\[([^\]]+)\]\]/g, "$1")
       .replace(/[{}[\]]/g, "_")
       // eslint-disable-next-line no-control-regex -- serialized frontmatter must reject embedded control bytes
-      .replace(/[\\/:*?"<>|\x00-\x1F]/g, "_");
+      .replace(/[\\:*?"<>|\x00-\x1F]/g, "_");
 
     const baseNameWithPrefix = `${filePrefix}${sanitizedFileName}.md`;
     if (getUtf8ByteLength(baseNameWithPrefix) > SAFE_FILENAME_BYTE_LIMIT) {
