@@ -642,7 +642,32 @@ export default class ChatModelManager {
       return lmStudioInstance;
     }
 
-    return new AIConstructor(constructorConfig);
+    let newModelInstance = new AIConstructor(constructorConfig);
+
+    if ((model.provider as ChatModelProviders) === ChatModelProviders.GOOGLE) {
+      // Enable Google tools if provider is Gemini
+      newModelInstance = (newModelInstance.bindTools?.([
+        { googleSearch: {} }, // Grounding with Google Search
+        { urlContext: {} }, // URL context
+        { codeExecution: {} }, // Code execution
+        // { googleMaps: {} }, // Grounding with Google Maps
+      ]) ?? newModelInstance) as BaseChatModel;
+    } else if ((model.provider as ChatModelProviders) === ChatModelProviders.OPENROUTERAI) {
+      newModelInstance = (newModelInstance.bindTools?.([
+        { type: "openrouter:web_search" },
+        { type: "openrouter:web_fetch" },
+      ]) ?? newModelInstance) as BaseChatModel;
+    } else if ((model.provider as ChatModelProviders) === ChatModelProviders.OPENAI) {
+      newModelInstance = (newModelInstance.bindTools?.([{ type: "web_search" }]) ??
+        newModelInstance) as BaseChatModel;
+    } else if ((model.provider as ChatModelProviders) === ChatModelProviders.ANTHROPIC) {
+      newModelInstance = (newModelInstance.bindTools?.([
+        { type: "web_search_20260209", name: "web_search" },
+        { type: "web_fetch_20260209", name: "web_fetch" },
+      ]) ?? newModelInstance) as BaseChatModel;
+    }
+
+    return newModelInstance;
   }
 
   validateChatModel(chatModel: BaseChatModel): boolean {
