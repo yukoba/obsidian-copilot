@@ -31,7 +31,7 @@ import { joinPosix } from "@/utils/pathUtils";
 import { App, Notice, parseYaml, TFile } from "obsidian";
 import { MessageRepository } from "./MessageRepository";
 
-const SAFE_FILENAME_BYTE_LIMIT = 100;
+const SAFE_FILENAME_BYTE_LIMIT = 200;
 
 function escapeYamlString(str: string): string {
   return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -114,12 +114,14 @@ export class ChatPersistenceManager {
       let targetFile: TFile | null = existingFile;
       let savedPath = preferredFileName;
 
-      const existingFileIsReal =
-        existingFile != null && isInVaultCache(this.app, existingFile.path);
+      const existingFile2 = this.app.vault.getAbstractFileByPath(preferredFileName);
 
-      if (existingFile && existingFileIsReal) {
-        await this.updateTranscript(existingFile.path, noteContent);
-        logInfo(`[ChatPersistenceManager] Updated existing chat file: ${existingFile.path}`);
+      const existingFileIsReal =
+        existingFile2 != null && isInVaultCache(this.app, existingFile2.path);
+
+      if (existingFile2 instanceof TFile && existingFileIsReal) {
+        await this.updateTranscript(existingFile2.path, noteContent);
+        logInfo(`[ChatPersistenceManager] Updated existing chat file: ${existingFile2.path}`);
       } else if (
         !isInVaultCache(this.app, preferredFileName) &&
         (await this.app.vault.adapter.exists(preferredFileName))
@@ -130,6 +132,15 @@ export class ChatPersistenceManager {
           `[ChatPersistenceManager] Updated existing chat file via adapter: ${preferredFileName}`
         );
       } else {
+        // Create folders
+        const directoryPath = preferredFileName.substring(0, preferredFileName.lastIndexOf("/"));
+        if (directoryPath != "") {
+          const directoryExists = this.app.vault.getAbstractFileByPath(directoryPath);
+          if (!directoryExists) {
+            await this.app.vault.createFolder(directoryPath);
+          }
+        }
+
         try {
           targetFile = await this.app.vault.create(preferredFileName, noteContent);
           new Notice(`Chat saved as note: ${preferredFileName}`);
@@ -589,7 +600,8 @@ ${conversationSummary}`;
     topic?: string
   ): string {
     const settings = getSettings();
-    const formattedDateTime = formatDateTime(new Date(firstMessageEpoch));
+    const firstMessageDate = new Date(firstMessageEpoch);
+    const formattedDateTime = formatDateTime(firstMessageDate);
     const timestampFileName = formattedDateTime.fileName;
 
     let topicForFilename: string;
@@ -632,13 +644,16 @@ ${conversationSummary}`;
     customFileName = customFileName
       .replace("{$topic}", truncatedTopic)
       .replace("{$date}", timestampFileName.split("_")[0])
-      .replace("{$time}", timestampFileName.split("_")[1]);
+      .replace("{$time}", timestampFileName.split("_")[1])
+      .replace("{$year}", firstMessageDate.getFullYear().toString())
+      .replace("{$month}", (firstMessageDate.getMonth() + 1).toString().padStart(2, "0"))
+      .replace("{$day}", firstMessageDate.getDate().toString().padStart(2, "0"));
 
     const sanitizedFileName = customFileName
       .replace(/\[\[([^\]]+)\]\]/g, "$1")
       .replace(/[{}[\]]/g, "_")
       // eslint-disable-next-line no-control-regex -- serialized frontmatter must reject embedded control bytes
-      .replace(/[\\/:*?"<>|\x00-\x1F]/g, "_");
+      .replace(/[\\:*?"<>|\x00-\x1F]/g, "_");
 
     const baseName = `${sanitizedFileName}.md`;
     if (getUtf8ByteLength(baseName) > SAFE_FILENAME_BYTE_LIMIT) {
