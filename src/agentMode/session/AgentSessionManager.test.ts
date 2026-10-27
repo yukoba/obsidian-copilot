@@ -995,6 +995,32 @@ describe("AgentSessionManager", () => {
         expect(mgr.getChatUIState(session.internalId)).toBe(mgr.getActiveChatUIState());
       });
 
+      it("probes the selected agent on its first session instead of at startup", async () => {
+        const preload = jest.fn(async () => undefined);
+        const mgr = buildManager({
+          preloader: { preload, getCachedModelCatalog: jest.fn(() => null) },
+        });
+
+        await mgr.createSession();
+
+        expect(preload).toHaveBeenCalledTimes(1);
+        expect(preload).toHaveBeenCalledWith("opencode");
+      });
+
+      it("uses an already-cached model catalog without probing the agent again", async () => {
+        const preload = jest.fn(async () => undefined);
+        const mgr = buildManager({
+          preloader: {
+            preload,
+            getCachedModelCatalog: jest.fn(() => modelCatalog("cached-model")),
+          },
+        });
+
+        await mgr.createSession();
+
+        expect(preload).not.toHaveBeenCalled();
+      });
+
       it("attaches the Copilot MCP server to a new session and routes its cards to that session", async () => {
         const copilotMcpServer = buildCopilotMcpServer();
         const mgr = buildManager({ copilotMcpServer });
@@ -3863,6 +3889,7 @@ describe("AgentSessionManager", () => {
         await mgr.createSession();
         mockBackendShutdown.mockClear();
         sessionCreateSpy.mockClear();
+        preloader.preload.mockClear();
 
         setInstallState({ kind: "absent" });
         await mgr.onInstallStateChanged("opencode");
@@ -3912,6 +3939,7 @@ describe("AgentSessionManager", () => {
         });
         await mgr.createSession();
         mockBackendShutdown.mockClear();
+        preloader.preload.mockClear();
 
         await mgr.onInstallStateChanged("opencode");
 
