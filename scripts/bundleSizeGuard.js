@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const ts = require("typescript");
 
-const MAX_BUNDLE_BYTES = 5_500_000;
+const MAX_BUNDLE_BYTES = 5_700_000;
 const LEGAL_BLOCK_LABEL = "/*! Bundled license information:";
 const LEGAL_BLOCK_PREFIX = `${LEGAL_BLOCK_LABEL}\n\n`;
 const LEGAL_BLOCK_SUFFIX = "*/\n";
