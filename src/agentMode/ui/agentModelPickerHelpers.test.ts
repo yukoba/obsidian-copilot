@@ -368,6 +368,24 @@ describe("agentModelPickerHelpers", () => {
       expect(entries.every((entry) => entry._disabledReason === undefined)).toBe(true);
     });
 
+    it("lists enabled models for an agent that has not been started without spawning it", () => {
+      const claude = {
+        ...makeDescriptor("claude"),
+        getEnabledModelEntries: () => [
+          { baseModelId: "default", name: "Default", credentialState: "ok" as const },
+          { baseModelId: "sonnet", name: "Sonnet", credentialState: "ok" as const },
+        ],
+      } as unknown as BackendDescriptor;
+      const manager = makeManager({
+        catalogById: { claude: null },
+        preloadStatusById: { claude: "absent" },
+      });
+
+      const { entries } = buildPickerEntries(manager, [claude], noSessionContext(), emptySettings);
+
+      expect(entries.map((entry) => entry.name)).toEqual(["default", "sonnet"]);
+    });
+
     it("does not invent model rows when discovery settles without a model catalog", () => {
       const descriptor = {
         ...makeDescriptor("claude"),

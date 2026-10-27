@@ -1,4 +1,4 @@
-import { type App, Platform } from "obsidian";
+import type { App } from "obsidian";
 import type CopilotPlugin from "@/main";
 import { logError } from "@/logger";
 import { MiyoClient } from "@/miyo/MiyoClient";
@@ -77,10 +77,6 @@ export {
 export { frameSink as acpFrameSink, setFrameSinkVaultBasePath } from "./session/debugSink";
 export { getManagedSkills, SkillManager, SkillsSettings } from "./skills";
 export type { Skill } from "./skills";
-function isAgentModeEnabled(): boolean {
-  return !Platform.isMobile;
-}
-
 export function applyCopilotDefaultModel(configuredModelId: string): BackendId[] {
   return seedCopilotDefaultModel(listBackendDescriptors(), configuredModelId);
 }
@@ -403,16 +399,6 @@ export function createAgentSessionManager(app: App, plugin: CopilotPlugin): Agen
       .then(() => initialSkillsReady)
       .finally(() => initializing.delete(descriptor.id));
     initializing.set(descriptor.id, ready);
-    if (isAgentModeEnabled()) {
-      manager.registerPreload(
-        descriptor.id,
-        ready.then(() => {
-          if (descriptor.getInstallState(getSettings()).kind === "ready") {
-            return manager.preloadModels(descriptor.id);
-          }
-        })
-      );
-    }
   }
 
   return manager;

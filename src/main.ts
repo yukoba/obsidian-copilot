@@ -353,7 +353,7 @@ export default class CopilotPlugin extends Plugin implements CopilotStartup {
 
     this.chainOwner = ChainOwner.getInstance(this.app, this.modelManagement);
 
-    // Must precede Agent Chat: startup model discovery may spawn OpenCode.
+    // Must precede Agent Chat: a session start may spawn OpenCode.
     // https://github.com/Brevilabs/obsidian-copilot-private/issues/165
     const selfHostWebSearchAgentBridge = createSelfHostWebSearchAgentBridge();
     this.selfHostWebSearchAgentBridge = selfHostWebSearchAgentBridge;
