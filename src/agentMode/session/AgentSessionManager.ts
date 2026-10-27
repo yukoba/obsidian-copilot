@@ -2439,8 +2439,14 @@ export class AgentSessionManager {
     const inflight = this.starting.get(backendId);
     if (inflight) return inflight;
     const startPromise = (async () => {
+      const startupProbe =
+        this.getCachedModelCatalog(backendId) === null &&
+        this.getPreloadStatus(backendId) === "absent"
+          ? this.preloader.preload(backendId)
+          : null;
+      if (startupProbe) this.registerPreload(backendId, startupProbe);
       if (!this.isPreloadReady(backendId)) {
-        await this.preloader.preload(backendId);
+        await (startupProbe ?? this.preloader.preload(backendId));
       }
 
       const warm = this.preloader.takeWarm(backendId);

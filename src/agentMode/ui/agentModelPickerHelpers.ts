@@ -217,7 +217,7 @@ export function buildPickerEntries(
     appendBackendSection(entries, descriptor, {
       backendModels,
       settings,
-      useEnabledFallback: hasNoCatalog && (preloadStatus === "ready" || preloadStatus === "error"),
+      useEnabledFallback: hasNoCatalog && preloadStatus !== "pending",
     });
     if (hasNoCatalog && entries.length === sectionStart) {
       if (preloadStatus === "pending") {
