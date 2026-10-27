@@ -474,16 +474,6 @@ export function createAgentSessionManager(app: App, plugin: CopilotPlugin): Agen
       .then(() => startupSkillLinks.get(descriptor.id))
       .finally(() => initializing.delete(descriptor.id));
     initializing.set(descriptor.id, ready);
-    if (isAgentModeEnabled()) {
-      manager.registerPreload(
-        descriptor.id,
-        ready.then(() => {
-          if (descriptor.getInstallState(getSettings()).kind === "ready") {
-            return manager.preloadModels(descriptor.id);
-          }
-        })
-      );
-    }
   }
 
   return manager;

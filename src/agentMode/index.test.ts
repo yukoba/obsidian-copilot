@@ -135,7 +135,6 @@ const mockManager = {
   preloadModels: jest.fn(async () => {}),
   restartBackend: jest.fn(async (_id: string, _reason: string) => {}),
   noteSpawnConfigChanged: jest.fn(async (_id: string, _reason: string) => {}),
-  registerPreload: jest.fn<void, [string, Promise<void>]>(),
   onInstallStateChanged: jest.fn(async (_id: string) => {}),
 };
 let plugin: CopilotPlugin;
@@ -180,6 +179,11 @@ function deferred() {
   return { promise, resolve };
 }
 
+async function settleStartup(): Promise<void> {
+  const { beforeBackendStart } = jest.mocked(AgentSessionManager).mock.calls[0][2];
+  await Promise.all(mockDescriptors.map((descriptor) => beforeBackendStart!(descriptor.id)));
+}
+
 describe("agentMode", () => {
   describe("createAgentSessionManager()", () => {
     beforeEach(() => {
@@ -214,12 +218,10 @@ describe("agentMode", () => {
       mockStates.opencode = { kind: "ready", source: "managed" };
       mockDescriptors[1].onPluginLoad.mockReturnValueOnce(upgrade.promise);
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls.find(([id]) => id === "claude")![1];
-      expect(mockManager.preloadModels).toHaveBeenCalledWith("claude");
-      expect(mockManager.preloadModels).not.toHaveBeenCalledWith("opencode");
+      expect(mockManager.preloadModels).not.toHaveBeenCalled();
       upgrade.resolve();
-      await mockManager.registerPreload.mock.calls.find(([id]) => id === "opencode")![1];
-      expect(mockManager.preloadModels).toHaveBeenCalledWith("opencode");
+      await settleStartup();
+      expect(mockManager.preloadModels).not.toHaveBeenCalled();
     });
 
     it("links skills for an agent its startup upgrade makes ready, without restarting it while the upgrade owns startup (https://github.com/Brevilabs/obsidian-copilot-private/issues/530, https://github.com/Brevilabs/obsidian-copilot-private/issues/830)", async () => {
@@ -242,7 +244,7 @@ describe("agentMode", () => {
         expect.objectContaining({ availableAgents: ["claude", "opencode"] })
       );
       upgrade.resolve();
-      await mockManager.registerPreload.mock.calls.find(([id]) => id === "opencode")![1];
+      await settleStartup();
       expect(mockManager.onInstallStateChanged).not.toHaveBeenCalled();
     });
     it("preloads an agent its startup upgrade makes ready only after that agent's skills are linked, while other agents preload without waiting (https://github.com/Brevilabs/obsidian-copilot-private/issues/830)", async () => {
@@ -253,14 +255,11 @@ describe("agentMode", () => {
         mockInstallListeners.opencode();
       });
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls.find(([id]) => id === "claude")![1];
-      expect(mockManager.preloadModels).toHaveBeenCalledWith("claude");
-      expect(mockManager.preloadModels).not.toHaveBeenCalledWith("opencode");
+      expect(mockManager.preloadModels).not.toHaveBeenCalled();
       linked.resolve();
-      await mockManager.registerPreload.mock.calls.find(([id]) => id === "opencode")![1];
-      expect(mockManager.preloadModels).toHaveBeenCalledWith("opencode");
+      expect(mockManager.preloadModels).not.toHaveBeenCalled();
     });
-    it("preloads a repaired installation after the upgrade makes it ready (https://github.com/Brevilabs/obsidian-copilot-private/issues/530)", async () => {
+    it("does not start a repaired installation at startup once its upgrade makes it ready (https://github.com/Brevilabs/obsidian-copilot-private/issues/530)", async () => {
       mockStates.opencode = {
         kind: "incompatible",
         source: "managed",
@@ -272,10 +271,10 @@ describe("agentMode", () => {
         mockStates.opencode = { kind: "ready", source: "managed" };
       });
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls.find(([id]) => id === "opencode")![1];
-      expect(mockManager.preloadModels).toHaveBeenCalledWith("opencode");
+      await settleStartup();
+      expect(mockManager.preloadModels).not.toHaveBeenCalled();
     });
-    it(`waits for initial skill reconciliation before preloading ready agents ${ISSUE}`, async () => {
+    it(`does not start an agent at startup after initial skill reconciliation ${ISSUE}`, async () => {
       const gate = deferred();
       reconcile.mockReturnValue(gate.promise);
       expect(createAgentSessionManager({} as App, plugin)).toBe(mockManager);
@@ -284,25 +283,24 @@ describe("agentMode", () => {
       );
       expect(mockManager.preloadModels).not.toHaveBeenCalled();
       gate.resolve();
-      await mockManager.registerPreload.mock.calls[0][1];
-      expect(mockManager.preloadModels).toHaveBeenCalledTimes(1);
-      expect(mockManager.preloadModels).toHaveBeenCalledWith("claude");
+      await settleStartup();
+      expect(mockManager.preloadModels).not.toHaveBeenCalled();
     });
 
     it.each(["reported", "rejected"])(
-      `still preloads available agents after a %s initial refresh failure ${ISSUE}`,
+      `does not start an agent at startup after a %s initial refresh failure ${ISSUE}`,
       async (failure) => {
         if (failure === "reported") mockRefresh.mockResolvedValueOnce({ ok: false });
         else mockRefresh.mockRejectedValueOnce(new Error("Disk unavailable"));
         createAgentSessionManager({} as App, plugin);
-        await mockManager.registerPreload.mock.calls[0][1];
-        expect(mockManager.preloadModels).toHaveBeenCalledWith("claude");
+        await settleStartup();
+        expect(mockManager.preloadModels).not.toHaveBeenCalled();
       }
     );
 
     it("https://github.com/Brevilabs/obsidian-copilot-private/issues/833 offers a reload when Obsidian's command line interface is turned on between agent starts, so new chats gain the obsidian_cli steering, without re-reconciling skills", async () => {
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls[0][1];
+      await settleStartup();
       const { beforeBackendStart } = jest.mocked(AgentSessionManager).mock.calls[0][2];
       const passes = reconcile.mock.calls.length;
 
@@ -322,7 +320,7 @@ describe("agentMode", () => {
       let excalidraw: unknown = null;
       const app = { plugins: { getPlugin: () => excalidraw } } as unknown as App;
       createAgentSessionManager(app, plugin);
-      await mockManager.registerPreload.mock.calls[0][1];
+      await settleStartup();
       const { beforeBackendStart } = jest.mocked(AgentSessionManager).mock.calls[0][2];
       const passes = reconcile.mock.calls.length;
 
@@ -340,7 +338,7 @@ describe("agentMode", () => {
 
     it(`settles new-agent skills before refreshing that agent's installation ${ISSUE}`, async () => {
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls[0][1];
+      await settleStartup();
       const gate = deferred();
       const handled = deferred();
       reconcile.mockReturnValueOnce(gate.promise);
@@ -358,7 +356,7 @@ describe("agentMode", () => {
 
     it("https://github.com/Brevilabs/obsidian-copilot-private/issues/599 offers an OpenCode reload after a builtin skill opt-out is reconciled and changes its system prompt", async () => {
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls[0][1];
+      await settleStartup();
       const reconciled = deferred();
       const noted = deferred();
       reconcile.mockReturnValueOnce(reconciled.promise);
@@ -386,7 +384,7 @@ describe("agentMode", () => {
 
     it("https://github.com/Brevilabs/obsidian-copilot-private/issues/736 offers an OpenCode reload once the search switch changes, so new chats gain or drop the Miyo steering", async () => {
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls[0][1];
+      await settleStartup();
       const noted = deferred();
       mockManager.noteSpawnConfigChanged.mockImplementationOnce(async () => noted.resolve());
       const withSearch = (enableMiyoSearchSkill: boolean) =>
@@ -404,7 +402,7 @@ describe("agentMode", () => {
 
     it("https://github.com/Brevilabs/obsidian-copilot-private/issues/740 offers only OpenCode a reload once Miyo document processing changes, so new chats gain or drop the miyo_parse steering", async () => {
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls[0][1];
+      await settleStartup();
       const noted = deferred();
       mockManager.noteSpawnConfigChanged.mockImplementationOnce(async () => noted.resolve());
       const withDocuments = (enableMiyoDocumentProcessing: boolean) => ({
@@ -680,7 +678,7 @@ describe("agentMode", () => {
 
     it(`retains only previously ready agents during compatibility checks ${ISSUE}`, async () => {
       createAgentSessionManager({} as App, plugin);
-      await mockManager.registerPreload.mock.calls[0][1];
+      await settleStartup();
       mockStates.claude = { kind: "checking", source: "custom" };
       mockStates.opencode = { kind: "checking", source: "custom" };
       const handled = deferred();

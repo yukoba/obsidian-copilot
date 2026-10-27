@@ -4127,6 +4127,7 @@ describe("AgentSessionManager", () => {
         await mgr.createSession();
         mockBackendShutdown.mockClear();
         sessionCreateSpy.mockClear();
+        preloader.preload.mockClear();
 
         setInstallState({ kind: "absent" });
         await mgr.onInstallStateChanged("opencode");
@@ -4176,6 +4177,7 @@ describe("AgentSessionManager", () => {
         });
         await mgr.createSession();
         mockBackendShutdown.mockClear();
+        preloader.preload.mockClear();
 
         await mgr.onInstallStateChanged("opencode");
 
